@@ -32,17 +32,10 @@ class WanyneTemplateEngine {
         this.#styles = {};
         this.#resources = {};
       }
-      let ts = Date.now();
       const template = this.getTemplate(file);
       const document = HTML.parse(template);
       this.processTemplate(file, document, scope);
       const parsed = document.toString();
-      console.log(
-        'render',
-        Date.now() - ts + ' ms',
-        parsed.length + ' chars',
-        file
-      );
       return parsed;
     } catch (error) {
       throw error;
@@ -58,111 +51,148 @@ class WanyneTemplateEngine {
     return this.#templates[key];
   }
 
-  resolveScript(fromPath, targetPath, inner) {
+  resolveScript(fromPath, targetPath, content) {
+    let key;
     const data = {
-      key: null,
       path: {},
-      content: inner,
+      key: null,
+      content: null,
     };
-    const fromDir = nodepath.parse(fromPath).dir;
-    data.path.abs = nodepath.resolve(fromDir, targetPath);
-    data.key = Buffer.from(data.path.abs).toString('base64');
 
-    if (!this.#scripts[data.key]) {
-      data.path.rel = data.path.abs.substring(this.views.length);
-
-      const content =
-        data.content || nodefs.readFileSync(data.path.abs).toString();
-      const lines = content.split(';');
-      const resolvedLines = [];
-
-      for (let line of lines) {
-        let trim = WanyneTemplateEngine.#trim(line);
-        if (/^import (.*) from (.*)$/.test(trim)) {
-          const m = trim.match(/^import (.*) from (.*)$/);
-          const path = m[2].slice(1, -1);
-          if (path.startsWith('.')) {
-            const sc = this.resolveScript(data.path.abs, path);
-            line = line.replace(m[2], `'${sc.path.rel}'`);
-          } else {
-            line = line.replace(m[2], `'${path}'`);
-          }
-        }
-        resolvedLines.push(line);
-      }
-
-      const resolvedContent = resolvedLines.join(';');
-      data.content = resolvedContent;
-      this.#scripts[data.key] = data;
+    if (this.#isAbsolute(targetPath)) {
+      fromPath = this.views;
+      targetPath = targetPath.substring(1);
     }
 
-    return this.#scripts[data.key];
+    if (targetPath) {
+      data.path.abs = nodepath.resolve(fromPath, targetPath);
+      key = Buffer.from(data.path.abs).toString('base64');
+
+      if (!this.#scripts[key]) {
+        data.path.rel = data.path.abs.substring(this.views.length);
+        data.content = nodefs.readFileSync(data.path.abs).toString();
+        const dir = nodepath.parse(data.path.abs).dir;
+        data.content = this.resolveScriptContent(dir, data.content);
+        this.#scripts[key] = data;
+      }
+    } else if (content !== undefined) {
+      data.content = content;
+      key = Buffer.from(data.content).toString('base64');
+
+      if (!this.#scripts[key]) {
+        data.content = this.resorlveStyleContent(fromPath, data.content);
+        this.#scripts[key] = data;
+      }
+    }
+
+    return this.#scripts[key];
   }
-  resolveStyle(fromPath, targetPath, inner) {
-    const data = {
-      key: null,
-      path: {},
-      content: inner,
-    };
-    const fromDir = nodepath.parse(fromPath).dir;
-    data.path.abs = nodepath.resolve(fromDir, targetPath);
-    data.key = Buffer.from(data.path.abs).toString('base64');
+  resolveScriptContent(fromPath, content) {
+    const lines = content.split(';');
+    const resolvedLines = [];
 
-    if (!this.#styles[data.key]) {
-      data.path.rel = data.path.abs.substring(this.views.length);
-
-      const content =
-        data.content || nodefs.readFileSync(data.path.abs).toString();
-      const lines = content.split(';');
-      const resolvedLines = [];
-
-      for (let line of lines) {
-        let trim = WanyneTemplateEngine.#trim(line);
-        if (/url\(?['"]([^'" ]+)['"]\)/.test(trim)) {
-          const m = trim.match(/url\(?['"]([^'" ]+)['"]\)/);
-          const path = m[1];
-          if (path.startsWith('.')) {
-            const sc = this.resolveStyle(data.path.abs, path);
-            line = line.replace(m[1], `${sc.path.rel}`);
-          } else {
-            line = line.replace(m[1], `${path}`);
-          }
+    for (let line of lines) {
+      let trim = this.#trim(line);
+      if (/^import (?:.*) from (.*)$/.test(trim)) {
+        let path = trim.match(/^import (?:.*) from (.*)$/)[1];
+        if (!this.#isHTTP(path)) {
+          const resolve = this.resolveScript(fromPath, path);
+          line = line.replace(path, resolve.path.rel);
         }
-        if (/^@import ['"]([^'" ]+)['"].*$/.test(trim)) {
-          const m = trim.match(/^@import ['"]([^'" ]+)['"].*$/);
-          const path = m[1];
-          if (path.startsWith('.')) {
-            const sc = this.resolveStyle(data.path.abs, path);
-            line = line.replace(m[1], `${sc.path.rel}`);
-          } else {
-            line = line.replace(m[1], `${path}`);
-          }
-        }
-        resolvedLines.push(line);
       }
-
-      const resolvedContent = resolvedLines.join(';');
-      data.content = resolvedContent;
-      this.#styles[data.key] = data;
+      resolvedLines.push(line);
     }
 
-    return this.#styles[data.key];
+    return resolvedLines.join(';');
+  }
+  resolveStyle(fromPath, targetPath, content) {
+    let key;
+    const data = {
+      path: {},
+      key: null,
+      content: null,
+    };
+
+    if (this.#isAbsolute(targetPath)) {
+      fromPath = this.views;
+      targetPath = targetPath.substring(1);
+    }
+
+    if (targetPath) {
+      data.path.abs = nodepath.resolve(fromPath, targetPath);
+      key = Buffer.from(data.path.abs).toString('base64');
+
+      if (!this.#styles[key]) {
+        data.path.rel = data.path.abs.substring(this.views.length);
+        data.content = nodefs.readFileSync(data.path.abs).toString();
+        const dir = nodepath.parse(data.path.abs).dir;
+        data.content = this.resolveStyleContent(dir, data.content);
+        this.#styles[key] = data;
+      }
+    } else if (content !== undefined) {
+      data.content = content;
+      key = Buffer.from(data.content).toString('base64');
+
+      if (!this.#styles[key]) {
+        data.content = this.resorlveStyleContent(fromPath, data.content);
+        this.#styles[key] = data;
+      }
+    }
+
+    return this.#styles[key];
+  }
+  resolveStyleContent(fromPath, content) {
+    const lines = content.split(';');
+    const resolvedLines = [];
+
+    for (let line of lines) {
+      let trim = this.#trim(line);
+      if (/url\(['"]?([^'")]+)['"]?\)/.test(trim)) {
+        let path = trim.match(/url\(['"]?([^'")]+)['"]?\)/)[1];
+        if (!this.#isHTTP(path)) {
+          const ext = nodepath.parse(path).ext;
+          if (ext === '.css') {
+            const resolve = this.resolveStyle(fromPath, path);
+            line = line.replace(path, resolve.path.rel);
+          } else {
+            const resolve = this.resolveResource(fromPath, path);
+            line = line.replace(path, resolve.path.rel);
+          }
+        }
+      } else if (/^@import ['"]([^'" ]+)['"].*$/.test(trim)) {
+        let path = trim.match(/^@import ['"]([^'" ]+)['"].*$/)[1];
+        if (!this.#isHTTP(path)) {
+          const resolve = this.resolveStyle(fromPath, path);
+          line = line.replace(path, resolve.path.rel);
+        }
+      }
+      resolvedLines.push(line);
+    }
+
+    return resolvedLines.join(';');
   }
   resolveResource(fromPath, targetPath) {
+    let key;
     const data = {
       key: null,
       path: {},
     };
-    const fromDir = nodepath.parse(fromPath).dir;
-    data.path.abs = nodepath.resolve(fromDir, targetPath);
-    data.key = Buffer.from(data.path.abs).toString('base64');
 
-    if (!this.#resources[data.key]) {
-      data.path.rel = data.path.abs.substring(this.views.length);
-      this.#resources[data.key] = data;
+    if (this.#isAbsolute(targetPath)) {
+      fromPath = this.views;
+      targetPath = targetPath.substring(1);
     }
 
-    return this.#resources[data.key];
+    data.path.abs = nodepath.resolve(fromPath, targetPath);
+    data.path.absq = data.path.abs.replace(/\?(.*)/, '');
+    key = Buffer.from(data.path.absq).toString('base64');
+
+    if (!this.#resources[key]) {
+      data.path.rel = data.path.abs.substring(this.views.length);
+      this.#resources[key] = data;
+    }
+
+    return this.#resources[key];
   }
   getPublicFile(targetPath) {
     if (targetPath.startsWith('/')) {
@@ -316,29 +346,29 @@ class WanyneTemplateEngine {
         src = src.substring(1);
       }
 
-      const importPath = nodepath.resolve(dir, src);
-      const ext = nodepath.parse(importPath).ext;
+      const target = nodepath.resolve(dir, src);
+      const ext = nodepath.parse(target).ext;
       let importDocument;
 
       // templates
       if (['.html', '.htm', '.xml', '.svg'].includes(ext)) {
-        const data = this.getTemplate(importPath);
+        const data = this.getTemplate(target);
         importDocument = HTML.parse(data);
       }
       // scripts
       else if (['.js', '.mjs'].includes(ext)) {
-        const script = this.resolveScript(path, importPath);
+        const script = this.resolveScript(dir, src);
         const data = `<script>${script.content}</script>`;
         importDocument = HTML.parse(data);
       }
       // styles
       else if (['.css'].includes(ext)) {
-        const style = this.resolveStyle(path, importPath);
+        const style = this.resolveStyle(dir, src);
         const data = `<style>${style.content}</style>`;
         importDocument = HTML.parse(data);
       }
 
-      this.processTemplate(importPath, importDocument, scope);
+      this.processTemplate(target, importDocument, scope);
 
       if (importDocument.childNodes.length === 1) {
         const attrs = element.attributes;
@@ -352,49 +382,55 @@ class WanyneTemplateEngine {
     }
   }
   processScriptTag(path, document, scope = {}) {
-    for (const element of document.querySelectorAll('script[src]')) {
-      const target = element.getAttribute('src');
-      if (target.startsWith('/')) {
-        continue;
-      }
-      const dir = nodepath.parse(path).dir;
-      const targetPath = nodepath.resolve(dir, target);
-      const resolve = this.resolveScript(path, targetPath);
-      element.setAttribute('src', resolve.path.abs);
-    }
     for (const element of document.querySelectorAll('script:not([src])')) {
-      const resolve = this.resolveScript(path, path, element.innerHTML);
-      element.innerHTML = resolve.content;
+      //const resolve = this.resolveScript(path, path, element.innerHTML);
+      //element.innerHTML = resolve.content;
+    }
+    for (const element of document.querySelectorAll('script[src]')) {
+      let target = element.getAttribute('src');
+      if (!this.#isHTTP(target)) {
+        const dir = nodepath.parse(path).dir;
+        const resolve = this.resolveScript(dir, target);
+        element.setAttribute('src', resolve.path.rel);
+      }
     }
   }
   processStyleTag(path, document, scope = {}) {
+    for (const element of document.querySelectorAll('style')) {
+      //const resolve = this.resolveStyle(path, null, element.innerHTML);
+      //element.innerHTML = resolve.content;
+    }
     for (const element of document.querySelectorAll(
       'link[href][rel="stylesheet"]'
     )) {
-      const target = element.getAttribute('href');
-      if (target.startsWith('/')) {
-        continue;
+      let target = element.getAttribute('href');
+      if (!this.#isHTTP(target)) {
+        const dir = nodepath.parse(path).dir;
+        const resolve = this.resolveStyle(dir, target);
+        element.setAttribute('href', resolve.path.rel);
       }
-      const dir = nodepath.parse(path).dir;
-      const targetPath = nodepath.resolve(dir, target);
-      const resolve = this.resolveStyle(path, targetPath);
-      element.setAttribute('src', resolve.path.abs);
-    }
-    for (const element of document.querySelectorAll('style')) {
-      const resolve = this.resolveStyle(path, path, element.innerHTML);
-      element.innerHTML = resolve.content;
     }
   }
   processResourceTag(path, document, scope = {}) {
     for (const element of document.querySelectorAll('img[src]')) {
       const target = element.getAttribute('src');
-      if (target.startsWith('/')) {
+      if (this.#isHTTP(target)) {
         continue;
       }
       const dir = nodepath.parse(path).dir;
-      const targetPath = nodepath.resolve(dir, target);
-      const resolve = this.resolveResource(path, targetPath);
+      const resolve = this.resolveResource(dir, target);
       element.setAttribute('src', resolve.path.rel);
+    }
+    for (const element of document.querySelectorAll(
+      'link[href]:not([rel="stylesheet"])'
+    )) {
+      const target = element.getAttribute('href');
+      if (this.#isHTTP(target)) {
+        continue;
+      }
+      const dir = nodepath.parse(path).dir;
+      const resolve = this.resolveResource(dir, target);
+      element.setAttribute('href', resolve.path.rel);
     }
   }
 
@@ -417,7 +453,15 @@ class WanyneTemplateEngine {
     return list;
   }
 
-  static #trim(str) {
+  #isHTTP(url) {
+    return Boolean(
+      url.substring(0, 6) === 'https:' || url.substring(0, 5) === 'http:'
+    );
+  }
+  #isAbsolute(url) {
+    return Boolean(url.substring(0, 1) === '/');
+  }
+  #trim(str) {
     return str.replace(/^[\s\r\n]*|[\s\r\n]*$/g, '');
   }
   static #encode(s) {

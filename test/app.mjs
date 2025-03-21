@@ -7,9 +7,7 @@ import express from 'express';
 import WanyneTemplateEngine from '../src/engine.mjs';
 
 const app = express();
-const engine = new WanyneTemplateEngine(path.resolve(__dirname, './views'), {
-  cache: false,
-});
+const engine = new WanyneTemplateEngine(path.resolve(__dirname, './views'));
 
 engine.express(app);
 

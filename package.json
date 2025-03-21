@@ -1,7 +1,7 @@
 {
   "name": "@wanyne/frontend-engine",
-  "version": "0.1.0",
-  "main": "engine.mjs",
+  "version": "0.1.7",
+  "main": "src/engine.mjs",
   "author": "Sungwan Jo <sung@wanyne.com>",
   "description": "Frontend template engine for Wanyne",
   "dependencies": {
