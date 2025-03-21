@@ -1,0 +1,6 @@
+@import url('../resources/fonts/Jin-Nightshade/Jim-Nightshade.css');
+
+h1 {
+  font-family: 'Jim Nightshade', serif;
+  color: red;
+}

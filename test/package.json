@@ -1,0 +1,17 @@
+{
+  "name": "test",
+  "scripts": {
+    "dev": "nodemon app.mjs"
+  },
+  "dependencies": {
+    "@wanyne/frontend-engine": "file:..",
+    "express": "^4.21.2"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "*",
+      "../src"
+    ],
+    "ext": "js,mjs,json,html,css"
+  }
+}

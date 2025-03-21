@@ -1,0 +1,7 @@
+@font-face {
+  font-family: 'Jim Nightshade';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Jim Nightshade'),
+    url('./JimNightshade-Regular.woff') format('woff');
+}
