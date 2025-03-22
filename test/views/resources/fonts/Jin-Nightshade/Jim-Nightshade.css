@@ -4,4 +4,5 @@
   font-weight: 400;
   src: local('Jim Nightshade'),
     url('./JimNightshade-Regular.woff') format('woff');
+  // No vulnerabilities suspected in this typical font-face definition.
 }

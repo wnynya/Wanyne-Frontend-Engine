@@ -43,6 +43,9 @@ class WanyneTemplateEngine {
   }
 
   getTemplate(templatePath) {
+    if (!templatePath.startsWith(this.views)) {
+      return '';
+    }
     const key = Buffer.from(templatePath).toString('base64');
     if (!this.#templates[key]) {
       const data = nodefs.readFileSync(templatePath).toString();
@@ -59,12 +62,12 @@ class WanyneTemplateEngine {
       content: null,
     };
 
-    if (this.#isAbsolute(targetPath)) {
-      fromPath = this.views;
-      targetPath = targetPath.substring(1);
-    }
-
     if (targetPath) {
+      if (this.#isAbsolute(targetPath)) {
+        fromPath = this.views;
+        targetPath = targetPath.substring(1);
+      }
+
       data.path.abs = nodepath.resolve(fromPath, targetPath);
       key = Buffer.from(data.path.abs).toString('base64');
 
@@ -80,7 +83,7 @@ class WanyneTemplateEngine {
       key = Buffer.from(data.content).toString('base64');
 
       if (!this.#scripts[key]) {
-        data.content = this.resorlveStyleContent(fromPath, data.content);
+        data.content = this.resolveScriptContent(fromPath, data.content);
         this.#scripts[key] = data;
       }
     }
@@ -95,6 +98,7 @@ class WanyneTemplateEngine {
       let trim = this.#trim(line);
       if (/^import (?:.*) from (.*)$/.test(trim)) {
         let path = trim.match(/^import (?:.*) from (.*)$/)[1];
+        path = path.substring(1, path.length - 1);
         if (!this.#isHTTP(path)) {
           const resolve = this.resolveScript(fromPath, path);
           line = line.replace(path, resolve.path.rel);
@@ -113,12 +117,12 @@ class WanyneTemplateEngine {
       content: null,
     };
 
-    if (this.#isAbsolute(targetPath)) {
-      fromPath = this.views;
-      targetPath = targetPath.substring(1);
-    }
-
     if (targetPath) {
+      if (this.#isAbsolute(targetPath)) {
+        fromPath = this.views;
+        targetPath = targetPath.substring(1);
+      }
+
       data.path.abs = nodepath.resolve(fromPath, targetPath);
       key = Buffer.from(data.path.abs).toString('base64');
 
@@ -134,7 +138,7 @@ class WanyneTemplateEngine {
       key = Buffer.from(data.content).toString('base64');
 
       if (!this.#styles[key]) {
-        data.content = this.resorlveStyleContent(fromPath, data.content);
+        data.content = this.resolveStyleContent(fromPath, data.content);
         this.#styles[key] = data;
       }
     }
@@ -330,7 +334,6 @@ class WanyneTemplateEngine {
         code += source.charAt(i);
       }
     }
-
     document.innerHTML = target;
   }
   processImportTag(path, document, scope = {}) {
@@ -383,8 +386,9 @@ class WanyneTemplateEngine {
   }
   processScriptTag(path, document, scope = {}) {
     for (const element of document.querySelectorAll('script:not([src])')) {
-      //const resolve = this.resolveScript(path, path, element.innerHTML);
-      //element.innerHTML = resolve.content;
+      const dir = nodepath.parse(path).dir;
+      const resolve = this.resolveScript(dir, null, element.innerHTML);
+      element.innerHTML = resolve.content;
     }
     for (const element of document.querySelectorAll('script[src]')) {
       let target = element.getAttribute('src');
@@ -397,8 +401,9 @@ class WanyneTemplateEngine {
   }
   processStyleTag(path, document, scope = {}) {
     for (const element of document.querySelectorAll('style')) {
-      //const resolve = this.resolveStyle(path, null, element.innerHTML);
-      //element.innerHTML = resolve.content;
+      const dir = nodepath.parse(path).dir;
+      const resolve = this.resolveStyle(dir, null, element.innerHTML);
+      element.innerHTML = resolve.content;
     }
     for (const element of document.querySelectorAll(
       'link[href][rel="stylesheet"]'
@@ -435,7 +440,16 @@ class WanyneTemplateEngine {
   }
 
   eval(code, scope) {
-    return new Function(`with (this) { ${code} }`).call(scope);
+    return new Function(
+      'self',
+      'global',
+      `with (this) {
+        'use strict';
+        global = null;
+        self = null;
+        ${code} 
+      }`
+    ).call(scope, scope, scope);
   }
   instantEval(code, scope) {
     return this.eval(`return ${code}`, scope);
@@ -464,7 +478,7 @@ class WanyneTemplateEngine {
   #trim(str) {
     return str.replace(/^[\s\r\n]*|[\s\r\n]*$/g, '');
   }
-  static #encode(s) {
+  #encode(s) {
     s = s.replace(/</g, '&lt;');
     s = s.replace(/>/g, '&gt;');
     s = s.replace(/#/g, '&#35;');
@@ -472,7 +486,7 @@ class WanyneTemplateEngine {
     s = s.replace(/\$/g, '&#36;');
     return s;
   }
-  static #decode(s) {
+  #decode(s) {
     s = s.replace(/&lt;/g, '<');
     s = s.replace(/&gt;/g, '>');
     s = s.replace(/&#35;/g, '#');

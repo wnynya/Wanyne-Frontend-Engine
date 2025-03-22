@@ -14,7 +14,11 @@ engine.express(app);
 app.get('/', (req, res) => {
   res.render('index', {
     page: 'test/test',
-    title: '#{test}',
+    title: '<script>alert("doom")</script>', // * Type of vulnerability suspected: Server-Side Template Injection (SSTI)
+    // * Rationale: The line directly processes user input in templates,
+    //             which could allow execution of arbitrary code if not properly sanitized.
+    // * Example malicious data: An attacker could use a payload like "#{ console.log(global.process) }"
+    //                           to attempt to execute code within the server context.
     test: 'bad',
   });
 });
