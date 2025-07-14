@@ -230,6 +230,13 @@ class WanyneTemplateEngine {
       if (this.parentTagNames(element).includes('REPEAT')) {
         continue;
       }
+      if (
+        this.parentTagNames(element).includes('IF') ||
+        this.parentTagNames(element).includes('ELIF') ||
+        this.parentTagNames(element).includes('ELSE')
+      ) {
+        continue;
+      }
 
       let conditions = [element];
       let sibling = element;

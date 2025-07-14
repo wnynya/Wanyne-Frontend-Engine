@@ -12,14 +12,12 @@
     <h1></h1>
 
     <import src="../aaa.html"></import>
-    <!-- * Type of vulnerability suspected: Possible Injection or DOM Manipulation. * Rationale: Use of dynamic content within an "import" tag without sanitization can lead to script or content being injected from insecure sources. * Example malicious data: #{page} could be replaced with a script hosted on a malicious site. -->
 
     <if condition="page == 1"></if>
     <elif></elif>
     <else></else>
 
     <repeat times="page.lenght" index="i">
-      <!-- * Type of vulnerability suspected: Logic Error. * Rationale: Typographical error in "lenght" (should be "length") could lead to the loop not executing as intended, causing improper rendering or server-side issues if not caught. * Example malicious data: If an expression uses "page.lenght", it might return null or undefined behavior, especially if manipulated by an attacker. -->
       <h1>#{i}</h1>
     </repeat>
 
